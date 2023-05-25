@@ -13,7 +13,7 @@ from .audio import N_SAMPLES, SAMPLE_RATE, load_audio, log_mel_spectrogram
 from .vad import load_vad_model, merge_chunks
 from .types import TranscriptionResult, SingleSegment
 
-def load_model(whisper_arch, device, compute_type="float16", asr_options=None, language=None,
+def load_model(whisper_arch, device, device_index=0, compute_type="float16", asr_options=None, language=None,
                vad_options=None, model=None, task="transcribe"):
     '''Load a Whisper model for inference.
     Args:
@@ -29,7 +29,7 @@ def load_model(whisper_arch, device, compute_type="float16", asr_options=None, l
     if whisper_arch.endswith(".en"):
         language = "en"
 
-    model = WhisperModel(whisper_arch, device=device, compute_type=compute_type)
+    model = WhisperModel(whisper_arch, device=device, device_index=device_index, compute_type=compute_type)
     if language is not None:
         tokenizer = faster_whisper.tokenizer.Tokenizer(model.hf_tokenizer, model.model.is_multilingual, task=task, language=language)
     else:
@@ -214,7 +214,7 @@ class FasterWhisperPipeline(Pipeline):
         return final_iterator
 
     def transcribe(
-        self, audio: Union[str, np.ndarray], batch_size=None, num_workers=0
+        self, audio: Union[str, np.ndarray], batch_size=None, num_workers=0, language=None, task=None
     ) -> TranscriptionResult:
         if isinstance(audio, str):
             audio = load_audio(audio)
@@ -228,14 +228,19 @@ class FasterWhisperPipeline(Pipeline):
 
         vad_segments = self.vad_model({"waveform": torch.from_numpy(audio).unsqueeze(0), "sample_rate": SAMPLE_RATE})
         vad_segments = merge_chunks(vad_segments, 30)
-
-        del_tokenizer = False
         if self.tokenizer is None:
-            language = self.detect_language(audio)
-            self.tokenizer = faster_whisper.tokenizer.Tokenizer(self.model.hf_tokenizer, self.model.model.is_multilingual, task="transcribe", language=language)
-            del_tokenizer = True
+            language = language or self.detect_language(audio)
+            task = task or "transcribe"
+            self.tokenizer = faster_whisper.tokenizer.Tokenizer(self.model.hf_tokenizer,
+                                                                self.model.model.is_multilingual, task=task,
+                                                                language=language)
         else:
-            language = self.tokenizer.language_code
+            language = language or self.tokenizer.language_code
+            task = task or self.tokenizer.task
+            if task != self.tokenizer.task or language != self.tokenizer.language_code:
+                self.tokenizer = faster_whisper.tokenizer.Tokenizer(self.model.hf_tokenizer,
+                                                                    self.model.model.is_multilingual, task=task,
+                                                                    language=language)
 
         segments: List[SingleSegment] = []
         batch_size = batch_size or self._batch_size
@@ -250,9 +255,6 @@ class FasterWhisperPipeline(Pipeline):
                     "end": round(vad_segments[idx]['end'], 3)
                 }
             )
-        
-        if del_tokenizer:
-            self.tokenizer = None
 
         return {"segments": segments, "language": language}
 
