@@ -51,7 +51,7 @@ def cli():
     parser.add_argument("--temperature", type=float, default=0, help="temperature to use for sampling")
     parser.add_argument("--best_of", type=optional_int, default=5, help="number of candidates when sampling with non-zero temperature")
     parser.add_argument("--beam_size", type=optional_int, default=5, help="number of beams in beam search, only applicable when temperature is zero")
-    parser.add_argument("--patience", type=float, default=None, help="optional patience value to use in beam decoding, as in https://arxiv.org/abs/2204.05424, the default (1.0) is equivalent to conventional beam search")
+    parser.add_argument("--patience", type=float, default=1.0, help="optional patience value to use in beam decoding, as in https://arxiv.org/abs/2204.05424, the default (1.0) is equivalent to conventional beam search")
     parser.add_argument("--length_penalty", type=float, default=1.0, help="optional token length penalty coefficient (alpha) as in https://arxiv.org/abs/1609.08144, uses simple length normalization by default")
 
     parser.add_argument("--suppress_tokens", type=str, default="-1", help="comma-separated list of token ids to suppress during sampling; '-1' will suppress most special characters except common punctuations")
@@ -67,8 +67,8 @@ def cli():
     parser.add_argument("--no_speech_threshold", type=optional_float, default=0.6, help="if the probability of the <|nospeech|> token is higher than this value AND the decoding has failed due to `logprob_threshold`, consider the segment as silence")
 
     parser.add_argument("--max_line_width", type=optional_int, default=None, help="(not possible with --no_align) the maximum number of characters in a line before breaking the line")
-    parser.add_argument("--max_line_count", type=optional_int, default=None, help="(requires --no_align) the maximum number of lines in a segment")
-    parser.add_argument("--highlight_words", type=str2bool, default=False, help="(requires --word_timestamps True) underline each word as it is spoken in srt and vtt")
+    parser.add_argument("--max_line_count", type=optional_int, default=None, help="(not possible with --no_align) the maximum number of lines in a segment")
+    parser.add_argument("--highlight_words", type=str2bool, default=False, help="(not possible with --no_align) underline each word as it is spoken in srt and vtt")
     parser.add_argument("--segment_resolution", type=str, default="sentence", choices=["sentence", "chunk"], help="(not possible with --no_align) the maximum number of characters in a line before breaking the line")
 
     parser.add_argument("--threads", type=optional_int, default=0, help="number of threads used by torch for CPU inference; supercedes MKL_NUM_THREADS/OMP_NUM_THREADS")
@@ -111,11 +111,18 @@ def cli():
     max_speakers: int = args.pop("max_speakers")
     print_progress: bool = args.pop("print_progress")
 
+    if args["language"] is not None:
+        args["language"] = args["language"].lower()
+        if args["language"] not in LANGUAGES:
+            if args["language"] in TO_LANGUAGE_CODE:
+                args["language"] = TO_LANGUAGE_CODE[args["language"]]
+            else:
+                raise ValueError(f"Unsupported language: {args['language']}")
 
-    if model_name.endswith(".en") and args["language"] not in {"en", "English"}:
+    if model_name.endswith(".en") and args["language"] != "en":
         if args["language"] is not None:
             warnings.warn(
-                f"{model_name} is an English-only model but receipted '{args['language']}'; using English instead."
+                f"{model_name} is an English-only model but received '{args['language']}'; using English instead."
             )
         args["language"] = "en"
     align_language = args["language"] if args["language"] is not None else "en" # default to loading english if not specified
@@ -126,8 +133,10 @@ def cli():
     else:
         temperature = [temperature]
 
+    faster_whisper_threads = 4
     if (threads := args.pop("threads")) > 0:
         torch.set_num_threads(threads)
+        faster_whisper_threads = threads
 
     asr_options = {
         "beam_size": args.pop("beam_size"),
@@ -148,7 +157,7 @@ def cli():
     if no_align:
         for option in word_options:
             if args[option]:
-                parser.error(f"--{option} requires --word_timestamps True")
+                parser.error(f"--{option} not possible with --no_align")
     if args["max_line_count"] and not args["max_line_width"]:
         warnings.warn("--max_line_count has no effect without --max_line_width")
     writer_args = {arg: args.pop(arg) for arg in word_options}
@@ -157,7 +166,7 @@ def cli():
     results = []
     tmp_results = []
     # model = load_model(model_name, device=device, download_root=model_dir)
-    model = load_model(model_name, device=device, device_index=device_index, compute_type=compute_type, language=args['language'], asr_options=asr_options, vad_options={"vad_onset": vad_onset, "vad_offset": vad_offset}, task=task)
+    model = load_model(model_name, device=device, device_index=device_index, compute_type=compute_type, language=args['language'], asr_options=asr_options, vad_options={"vad_onset": vad_onset, "vad_offset": vad_offset}, task=task, threads=faster_whisper_threads)
 
     for audio_path in args.pop("audio"):
         audio = load_audio(audio_path)

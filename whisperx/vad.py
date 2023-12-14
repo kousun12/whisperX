@@ -142,6 +142,7 @@ class Binarize:
             is_active = k_scores[0] > self.onset
             curr_scores = [k_scores[0]]
             curr_timestamps = [start]
+            t = start
             for t, y in zip(timestamps[1:], k_scores[1:]):
                 # currently active
                 if is_active: 
@@ -260,7 +261,12 @@ def merge_vad(vad_arr, pad_onset=0.0, pad_offset=0.0, min_duration_off=0.0, min_
     active_segs = pd.DataFrame([x['segment'] for x in active['content']])
     return active_segs
 
-def merge_chunks(segments, chunk_size):
+def merge_chunks(
+    segments,
+    chunk_size,
+    onset: float = 0.5,
+    offset: Optional[float] = None,
+):
     """
     Merge operation described in paper
     """
@@ -270,7 +276,7 @@ def merge_chunks(segments, chunk_size):
     speaker_idxs = []
 
     assert chunk_size > 0
-    binarize = Binarize(max_duration=chunk_size)
+    binarize = Binarize(max_duration=chunk_size, onset=onset, offset=offset)
     segments = binarize(segments)
     segments_list = []
     for speech_turn in segments.get_timeline():
