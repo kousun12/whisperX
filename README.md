@@ -199,6 +199,7 @@ print(result["segments"]) # segments are now assigned speaker IDs
 
 ## Demos 🚀
 
+[![Replicate (large-v3](https://img.shields.io/static/v1?label=Replicate+WhisperX+large-v3&message=Demo+%26+Cloud+API&color=blue)](https://replicate.com/victor-upmeet/whisperx) 
 [![Replicate (large-v2](https://img.shields.io/static/v1?label=Replicate+WhisperX+large-v2&message=Demo+%26+Cloud+API&color=blue)](https://replicate.com/daanelson/whisperx) 
 [![Replicate (medium)](https://img.shields.io/static/v1?label=Replicate+WhisperX+medium&message=Demo+%26+Cloud+API&color=blue)](https://replicate.com/carnifexer/whisperx) 
 
@@ -222,7 +223,7 @@ Transcription differences from openai's whisper:
 
 - Transcript words which do not contain characters in the alignment models dictionary e.g. "2014." or "£13.60" cannot be aligned and therefore are not given a timing.
 - Overlapping speech is not handled particularly well by whisper nor whisperx
-- Diarization is far from perfect (working on this with custom model v4 -- see contact me).
+- Diarization is far from perfect
 - Language specific wav2vec2 model is needed
 
 
@@ -266,7 +267,7 @@ Bug finding and pull requests are also highly appreciated to keep this project g
 <h2 align="left" id="contact">Contact/Support 📇</h2>
 
 
-Contact maxhbain@gmail.com for queries. WhisperX v4 development is underway with with siginificantly improved diarization. To support v4 and get early access, get in touch.
+Contact maxhbain@gmail.com for queries.
 
 <a href="https://www.buymeacoffee.com/maxhbain" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
 
